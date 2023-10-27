@@ -1,28 +1,206 @@
 ---
-title: ""
-author: ""
+title: "Lab 10"
+author: "Allison Louie"
 format:
   html:
     embed-resources: true
 ---
 
-## Quarto
-
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
-
-## Running Code
-
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
-
 ```{r}
-1 + 1
+library(dplyr)
+library(tidyverse)
+library(RSQLite)
+library(DBI)
 ```
 
-You can add options to executable code like this
-
 ```{r}
-#| echo: false
-2 * 2
+# Initialize a temporary in memory database
+con <- dbConnect(SQLite(), ":memory:")
+
+# Download tables
+actor <- read.csv("https://raw.githubusercontent.com/ivanceras/sakila/master/csv-sakila-db/actor.csv")
+rental <- read.csv("https://raw.githubusercontent.com/ivanceras/sakila/master/csv-sakila-db/rental.csv")
+customer <- read.csv("https://raw.githubusercontent.com/ivanceras/sakila/master/csv-sakila-db/customer.csv")
+payment <- read.csv("https://raw.githubusercontent.com/ivanceras/sakila/master/csv-sakila-db/payment_p2007_01.csv")
+
+# Copy data.frames to database
+dbWriteTable(con, "actor", actor)
+dbWriteTable(con, "rental", rental)
+dbWriteTable(con, "customer", customer)
+dbWriteTable(con, "payment", payment)
+
+dbListTables(con)
+column_info <- dbListFields(con, "actor")
+column_info
 ```
 
-The `echo: false` option disables the printing of code (only output is displayed).
+## 1. Edit the code below to retrieve the actor ID, first name and last name for all actors using the actor table. Sort by last name and then by first name (note that the code chunk below is set up to run SQL code rather than R code).
+
+```{sql, connection=con, output.var="x1"}
+SELECT actor_id, first_name, last_name
+FROM actor
+ORDER BY last_name, first_name;
+```
+
+```{r, echo=FALSE}
+x1
+```
+
+## 2. Retrieve the actor ID, first name, and last name for actors whose last name equals 'WILLIAMS' or 'DAVIS'.
+
+```{sql, connection=con, output.var="x2"}
+SELECT actor_id, first_name, last_name
+FROM actor
+WHERE last_name IN ('WILLIAMS', 'DAVIS');
+```
+
+```{r, echo=FALSE}
+x2
+```
+
+## 3. Write a query against the rental table that returns the IDs of the customers who rented a film on July 5, 2005 (use the rental.rental_date column, and you can use the date() function to ignore the time component). Include a single row for each distinct customer ID.
+
+```{sql, connection=con, output.var="x3"}
+SELECT DISTINCT customer_id
+FROM rental
+WHERE DATE(rental_date) = '2005-07-05';
+```
+
+```{r, echo=FALSE}
+x3
+```
+
+## 4.1. Construct a query that retrieves all rows from the payment table where the amount is either 1.99, 7.99, 9.99.
+
+```{sql, connection=con, output.var="x4.1"}
+SELECT *
+FROM payment
+WHERE amount IN (1.99, 7.99, 9.99);
+```
+
+```{r, echo=FALSE}
+x4.1
+```
+
+## 4.2. Construct a query that retrieves all rows from the payment table where the amount is greater then 5.
+
+```{sql, connection=con, output.var="x4.2"}
+SELECT *
+FROM payment
+WHERE amount > 5;
+```
+
+```{r, echo=FALSE}
+x4.2
+```
+
+## 4.3. Construct a query that retrieves all rows from the payment table where the amount is greater then 5 and less then 8.
+
+```{sql, connection=con, output.var="x4.3"}
+SELECT *
+FROM payment
+WHERE amount > 5 AND amount < 8;
+```
+
+```{r, echo=FALSE}
+x4.3
+```
+
+## 5. Retrieve all the payment IDs and their amounts from the customers whose last name is 'DAVIS'.
+
+```{sql connection=con, output.var="x5"}
+SELECT payment.payment_id, payment.amount
+FROM payment
+INNER JOIN customer ON payment.customer_id = customer.customer_id
+WHERE customer.last_name = 'DAVIS';
+```
+
+```{r, echo=FALSE}
+x5
+```
+
+## 6.1. Use COUNT(\*) to count the number of rows in rental.
+
+```{sql connection=con, output.var="x6.1"}
+SELECT COUNT(*) FROM rental;
+```
+
+```{r, echo=FALSE}
+x6.1
+```
+
+## 6.2. Use COUNT(\*) and GROUP BY to count the number of rentals for each customer_id.
+
+```{sql connection=con, output.var="x6.2"}
+SELECT customer_id, COUNT(*) as rental_count
+FROM rental
+GROUP BY customer_id;
+```
+
+```{r, echo=FALSE}
+x6.2
+```
+
+## 6.3. Repeat the previous query and sort by the count in descending order.
+
+```{sql connection=con, output.var="x6.3"}
+SELECT customer_id, COUNT(*) as rental_count
+FROM rental
+GROUP BY customer_id
+ORDER BY rental_count DESC
+```
+
+```{r, echo=FALSE}
+x6.3
+```
+
+## 6.4. Repeat the previous query but use `HAVING` to only keep the groups with 40 or more.
+
+```{sql connection=con, output.var="x6.4"}
+SELECT customer_id, COUNT(*) as rental_count
+          FROM rental
+          GROUP BY customer_id
+          HAVING rental_count >= 40
+          ORDER BY rental_count DESC
+```
+
+```{r, echo=FALSE}
+x6.4
+```
+
+## 7.1. Modify the above query to do those calculations for each customer_id.
+
+```{sql connection=con, output.var="x7.1"}
+SELECT customer_id,
+       MAX(amount) as max_amount,
+       MIN(amount) as min_amount,
+       AVG(amount) as avg_amount,
+       SUM(amount) as total_amount
+FROM payment
+GROUP BY customer_id;
+```
+
+```{r, echo=FALSE}
+x7.1
+```
+
+## 7.2. Modify the above query to only keep the customer_ids that have more then 5 payments.
+
+```{sql connection=con, output.var="x7.2"}
+SELECT customer_id,
+       MAX(amount) as max_amount,
+       MIN(amount) as min_amount,
+       AVG(amount) as avg_amount,
+       SUM(amount) as total_amount
+FROM payment
+GROUP BY customer_id
+HAVING COUNT(*) > 5;
+```
+
+```{r, echo=FALSE}
+x7.2
+```
+
+```{r}
+dbDisconnect(con)
+```
